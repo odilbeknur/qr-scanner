@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QR Сканер чеков</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <style>
+        @keyframes gradient {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+        .gradient-bg {
+            background: linear-gradient(-45deg, #667eea, #764ba2, #f093fb, #4facfe);
+            background-size: 400% 400%;
+            animation: gradient 15s ease infinite;
+        }
+        .glass {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .scan-area {
+            box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.3), 0 0 30px rgba(99, 102, 241, 0.5);
+        }
+    </style>
+</head>
+<body class="gradient-bg min-h-screen">
+    <div class="container mx-auto px-4 py-8 max-w-6xl">
+        <!-- Header -->
+        <div class="text-center mb-8">
+            <div class="inline-block glass rounded-3xl px-8 py-6 shadow-2xl">
+                <h1 class="text-5xl font-black bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+                    🎯 QR Сканер
+                </h1>
+                <p class="text-gray-600 mt-2 font-medium">Сканируйте и сохраняйте чеки</p>
+            </div>
+        </div>
+
+        <div class="grid md:grid-cols-2 gap-6">
+            <!-- Сканер -->
+            <div class="glass rounded-3xl shadow-2xl overflow-hidden">
+                <div class="bg-gradient-to-r from-purple-600 to-pink-600 p-6">
+                    <h2 class="text-2xl font-bold text-white flex items-center gap-2">
+                        <span>📷</span> Сканирование
+                    </h2>
+                </div>
+
+                <div class="p-6">
+                    <!-- Buttons -->
+                    <div id="initial-screen" class="space-y-4">
+                        <button onclick="startScanner()" class="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-bold py-5 rounded-2xl transition transform hover:scale-105 shadow-lg">
+                            <span class="text-2xl">📸</span>
+                            <span class="block mt-1">Сканировать камерой</span>
+                        </button>
+                        
+                        <div class="relative">
+                            <div class="absolute inset-0 flex items-center">
+                                <div class="w-full border-t-2 border-gray-300"></div>
+                            </div>
+                            <div class="relative flex justify-center">
+                                <span class="px-4 bg-white text-gray-500 font-semibold">или</span>
+                            </div>
+                        </div>
+                        
+                        <button onclick="showManualInput()" class="w-full bg-gradient-to-r from-pink-500 to-orange-500 hover:from-pink-600 hover:to-orange-600 text-white font-bold py-4 rounded-2xl transition transform hover:scale-105 shadow-lg">
+                            <span class="text-xl">✏️</span> Ввести URL вручную
+                        </button>
+                    </div>
+
+                    <!-- Scanner -->
+                    <div id="scanner-screen" class="hidden">
+                        <div class="mb-4 p-4 bg-gradient-to-r from-yellow-100 to-orange-100 border-2 border-yellow-400 rounded-2xl">
+                            <p class="text-sm text-yellow-900 font-semibold text-center">
+                                📱 Наведите камеру на QR-код
+                            </p>
+                        </div>
+                        <div id="reader" class="rounded-2xl overflow-hidden scan-area"></div>
+                        <button onclick="stopScanner()" class="w-full mt-4 bg-gradient-to-r from-red-500 to-pink-600 hover:from-red-600 hover:to-pink-700 text-white font-bold py-4 rounded-2xl transition transform hover:scale-105">
+                            ❌ Отменить
+                        </button>
+                    </div>
+
+                    <!-- Manual Input -->
+                    <div id="manual-screen" class="hidden space-y-4">
+                        <div class="relative">
+                            <input type="text" id="manual-url" placeholder="https://ofd.soliq.uz/check?..." 
+                                class="w-full px-5 py-4 border-2 border-purple-300 rounded-2xl focus:border-purple-500 focus:outline-none focus:ring-4 focus:ring-purple-200 transition">
+                            <span class="absolute right-4 top-4 text-purple-400">🔗</span>
+                        </div>
+                        <button onclick="loadManualURL()" class="w-full bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600 text-white font-bold py-4 rounded-2xl transition transform hover:scale-105">
+                            ✅ Загрузить
+                        </button>
+                        <button onclick="reset()" class="w-full bg-gray-400 hover:bg-gray-500 text-white font-bold py-3 rounded-2xl transition">
+                            ← Назад
+                        </button>
+                    </div>
+
+                    <!-- Loading -->
+                    <div id="loading-screen" class="hidden text-center py-16">
+                        <div class="relative inline-block">
+                            <div class="animate-spin rounded-full h-20 w-20 border-t-4 border-b-4 border-purple-600"></div>
+                            <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-3xl">
+                                ⏳
+                            </div>
+                        </div>
+                        <p class="text-xl font-bold text-gray-700 mt-6">Загрузка...</p>
+                        <p class="text-sm text-gray-500 mt-2" id="loading-msg">Обработка данных</p>
+                    </div>
+
+                    <!-- Error -->
+                    <div id="error-screen" class="hidden bg-gradient-to-r from-red-100 to-pink-100 border-2 border-red-400 text-red-700 px-5 py-4 rounded-2xl font-semibold"></div>
+                </div>
+            </div>
+
+            <!-- Архив чеков -->
+            <div class="glass rounded-3xl shadow-2xl overflow-hidden">
+                <div class="bg-gradient-to-r from-teal-500 to-green-500 p-6">
+                    <h2 class="text-2xl font-bold text-white flex items-center justify-between">
+                        <span class="flex items-center gap-2">
+                            <span>📋</span> Архив чеков
+                        </span>
+                        <span id="receipt-count" class="text-sm bg-white text-teal-600 px-3 py-1 rounded-full font-bold">
+                            {{ receipts|length }}
+                        </span>
+                    </h2>
+                </div>
+
+                <div class="p-6 h-[600px] overflow-y-auto">
+                    <div id="receipts-list" class="space-y-4">
+                        {% if receipts %}
+                            {% for receipt in receipts %}
+                            <div class="bg-gradient-to-br from-white to-gray-50 p-5 rounded-2xl border-2 border-gray-200 hover:border-purple-400 transition shadow-md hover:shadow-xl cursor-pointer" onclick="showReceiptDetails({{ receipt.id }})">
+                                <div class="flex justify-between items-start mb-3">
+                                    <div class="flex-1">
+                                        <h3 class="font-bold text-lg text-gray-800">{{ receipt.companyName }}</h3>
+                                        <p class="text-xs text-gray-500 mt-1">{{ receipt.receiptNumber }}</p>
+                                    </div>
+                                    <button onclick="event.stopPropagation(); deleteReceipt({{ receipt.id }})" class="text-red-500 hover:text-red-700 font-bold text-xl">
+                                        🗑️
+                                    </button>
+                                </div>
+                                <div class="flex justify-between items-center pt-3 border-t border-gray-200">
+                                    <span class="text-sm text-gray-600">💰 {{ receipt.total }} сум</span>
+                                    <span class="text-xs text-gray-400">📅 {{ receipt.dateTime }}</span>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="text-center py-20 text-gray-400">
+                                <div class="text-6xl mb-4">📭</div>
+                                <p class="text-lg font-semibold">Нет отсканированных чеков</p>
+                                <p class="text-sm mt-2">Отсканируйте первый чек!</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal для деталей чека -->
+        <div id="receipt-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50" onclick="closeModal()">
+            <div class="glass rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl" onclick="event.stopPropagation()">
+                <div class="bg-gradient-to-r from-indigo-600 to-purple-600 p-6 sticky top-0 z-10">
+                    <div class="flex justify-between items-center">
+                        <h2 class="text-2xl font-bold text-white">📄 Детали чека</h2>
+                        <button onclick="closeModal()" class="text-white text-3xl hover:text-gray-200">×</button>
+                    </div>
+                </div>
+                <div id="receipt-details" class="p-6"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let html5QrCode = null;
+        let currentReceipts = {{ receipts_json|safe }};
+
+        function showScreen(id) {
+            ['initial-screen', 'scanner-screen', 'manual-screen', 'loading-screen', 'error-screen'].forEach(s => {
+                document.getElementById(s)?.classList.add('hidden');
+            });
+            if (id) document.getElementById(id)?.classList.remove('hidden');
+        }
+
+        function showError(msg) {
+            const el = document.getElementById('error-screen');
+            el.textContent = msg;
+            el.classList.remove('hidden');
+            setTimeout(() => el.classList.add('hidden'), 5000);
+        }
+
+        function setLoading(msg) {
+            document.getElementById('loading-msg').textContent = msg;
+        }
+
+        async function startScanner() {
+            showScreen('scanner-screen');
+            html5QrCode = new Html5Qrcode("reader");
+            
+            try {
+                await html5QrCode.start(
+                    { facingMode: "environment" },
+                    { fps: 10, qrbox: { width: 280, height: 280 } },
+                    async (decodedText) => {
+                        await html5QrCode.stop();
+                        handleQRCode(decodedText);
+                    }
+                );
+            } catch (err) {
+                showScreen('initial-screen');
+                showError('Ошибка камеры: ' + err);
+            }
+        }
+
+        async function stopScanner() {
+            if (html5QrCode) {
+                await html5QrCode.stop();
+                html5QrCode = null;
+            }
+            reset();
+        }
+
+        async function handleQRCode(url) {
+            showScreen('loading-screen');
+            setLoading('Загрузка чека...');
+            
+            try {
+                const response = await fetch(`/api/fetch-receipt?url=${encodeURIComponent(url)}`);
+                const result = await response.json();
+                
+                if (result.success) {
+                    showScreen('initial-screen');
+                    await loadReceipts();
+                    showSuccess('✅ Чек добавлен в архив!');
+                } else {
+                    showScreen('initial-screen');
+                    showError('Ошибка: ' + result.error);
+                }
+            } catch (err) {
+                showScreen('initial-screen');
+                showError('Ошибка загрузки: ' + err.message);
+            }
+        }
+
+        function showManualInput() {
+            showScreen('manual-screen');
+            document.getElementById('manual-url').value = '';
+        }
+
+        async function loadManualURL() {
+            const url = document.getElementById('manual-url').value.trim();
+            if (!url) return showError('Введите URL');
+            if (!url.startsWith('http')) return showError('URL должен начинаться с http://');
+            await handleQRCode(url);
+        }
+
+        async function loadReceipts() {
+            const response = await fetch('/api/receipts');
+            const data = await response.json();
+            currentReceipts = data.receipts;
+            
+            const list = document.getElementById('receipts-list');
+            const count = document.getElementById('receipt-count');
+            
+            count.textContent = currentReceipts.length;
+            
+            if (currentReceipts.length === 0) {
+                list.innerHTML = `
+                    <div class="text-center py-20 text-gray-400">
+                        <div class="text-6xl mb-4">📭</div>
+                        <p class="text-lg font-semibold">Нет отсканированных чеков</p>
+                        <p class="text-sm mt-2">Отсканируйте первый чек!</p>
+                    </div>
+                `;
+            } else {
+                list.innerHTML = currentReceipts.map(r => `
+                    <div class="bg-gradient-to-br from-white to-gray-50 p-5 rounded-2xl border-2 border-gray-200 hover:border-purple-400 transition shadow-md hover:shadow-xl cursor-pointer" onclick="showReceiptDetails(${r.id})">
+                        <div class="flex justify-between items-start mb-3">
+                            <div class="flex-1">
+                                <h3 class="font-bold text-lg text-gray-800">${r.companyName}</h3>
+                                <p class="text-xs text-gray-500 mt-1">${r.receiptNumber}</p>
+                            </div>
+                            <button onclick="event.stopPropagation(); deleteReceipt(${r.id})" class="text-red-500 hover:text-red-700 font-bold text-xl">
+                                🗑️
+                            </button>
+                        </div>
+                        <div class="flex justify-between items-center pt-3 border-t border-gray-200">
+                            <span class="text-sm text-gray-600">💰 ${r.total} сум</span>
+                            <span class="text-xs text-gray-400">📅 ${r.dateTime}</span>
+                        </div>
+                    </div>
+                `).join('');
+            }
+        }
+
+        async function deleteReceipt(id) {
+            if (!confirm('Удалить этот чек?')) return;
+            
+            await fetch(`/api/receipts/${id}`, { method: 'DELETE' });
+            await loadReceipts();
+            showSuccess('🗑️ Чек удален');
+        }
+
+        function showReceiptDetails(id) {
+            const receipt = currentReceipts.find(r => r.id === id);
+            if (!receipt) return;
+            
+            const products = receipt.products.map(p => `
+                <div class="bg-gray-50 p-4 rounded-xl hover:bg-gray-100 transition">
+                    <div class="flex justify-between gap-4">
+                        <div class="flex-1">
+                            <p class="font-semibold text-gray-800">${p.name}</p>
+                            <p class="text-sm text-gray-500 mt-1">Количество: ${p.quantity}</p>
+                        </div>
+                        <p class="font-bold text-lg text-indigo-600 whitespace-nowrap">${p.price} сум</p>
+                    </div>
+                </div>
+            `).join('');
+
+            document.getElementById('receipt-details').innerHTML = `
+                <div class="space-y-6">
+                    <div class="bg-gradient-to-r from-indigo-50 to-purple-50 p-5 rounded-2xl border-2 border-indigo-200">
+                        <h3 class="font-bold text-xl text-gray-800 mb-2">${receipt.companyName}</h3>
+                        <p class="text-sm text-gray-600"><span class="font-semibold">Чек:</span> ${receipt.receiptNumber}</p>
+                        <p class="text-sm text-gray-600"><span class="font-semibold">Дата:</span> ${receipt.dateTime}</p>
+                    </div>
+
+                    <div>
+                        <h4 class="font-bold text-lg text-gray-800 mb-3 flex items-center gap-2">
+                            <span>🛒</span> Товары
+                        </h4>
+                        <div class="space-y-2">${products}</div>
+                    </div>
+
+                    <div class="bg-gradient-to-r from-green-50 to-emerald-50 p-6 rounded-2xl border-2 border-green-300">
+                        <div class="flex justify-between items-center">
+                            <span class="text-xl font-bold text-gray-800">Итого:</span>
+                            <span class="text-3xl font-bold text-green-600">${receipt.total} сум</span>
+                        </div>
+                    </div>
+
+                    <a href="${receipt.url}" target="_blank" class="block w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-bold py-4 rounded-2xl text-center transition transform hover:scale-105">
+                        🔗 Открыть оригинал чека
+                    </a>
+                </div>
+            `;
+            
+            document.getElementById('receipt-modal').classList.remove('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('receipt-modal').classList.add('hidden');
+        }
+
+        function showSuccess(msg) {
+            const div = document.createElement('div');
+            div.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-4 rounded-2xl shadow-2xl z-50 font-bold';
+            div.textContent = msg;
+            document.body.appendChild(div);
+            setTimeout(() => div.remove(), 3000);
+        }
+
+        function reset() {
+            showScreen('initial-screen');
+        }
+    </script>
+</body>
+</html>

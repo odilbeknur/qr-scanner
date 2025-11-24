@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Сканер QR-кодов чеков</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        }
+        #debug {
+            position: fixed;
+            bottom: 10px;
+            left: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.8);
+            color: #0f0;
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 11px;
+            max-height: 120px;
+            overflow-y: auto;
+            z-index: 9999;
+        }
+        .scan-animation {
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
+        .loading-spinner {
+            border: 3px solid #f3f4f6;
+            border-top: 3px solid #3b82f6;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            margin-right: 8px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .progress-bar {
+            height: 4px;
+            background: #e5e7eb;
+            border-radius: 2px;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+        .progress-fill {
+            height: 100%;
+            background: #3b82f6;
+            border-radius: 2px;
+            transition: width 0.3s ease;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen p-4">
+    <div class="max-w-2xl mx-auto">
+        <div class="bg-white rounded-2xl shadow-xl overflow-hidden">
+            <!-- Header -->
+            <div class="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white">
+                <div class="flex items-center gap-3">
+                    <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                    <div>
+                        <h1 class="text-2xl font-bold">Сканер чеков</h1>
+                        <p class="text-blue-100 text-sm">Отсканируйте QR-код для просмотра деталей</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Content -->
+            <div class="p-6" id="content">
+                <!-- Initial buttons -->
+                <div id="initial-screen" class="space-y-4">
+                    <button onclick="startCamera()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-4 px-6 rounded-xl flex items-center justify-center gap-3 transition-colors shadow-lg">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                        </svg>
+                        Сканировать камерой
+                    </button>
+
+                    <div class="relative">
+                        <div class="absolute inset-0 flex items-center">
+                            <div class="w-full border-t border-gray-300"></div>
+                        </div>
+                        <div class="relative flex justify-center text-sm">
+                            <span class="px-4 bg-white text-gray-500">или</span>
+                        </div>
+                    </div>
+
+                    <label class="w-full border-2 border-dashed border-gray-300 hover:border-blue-500 rounded-xl py-8 flex flex-col items-center justify-center gap-3 cursor-pointer transition-colors">
+                        <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                        </svg>
+                        <span class="text-gray-600 font-medium">Загрузить изображение</span>
+                        <span class="text-sm text-gray-400">PNG, JPG до 10MB</span>
+                        <input type="file" accept="image/*" onchange="handleFileUpload(event)" class="hidden">
+                    </label>
+
+                    <button onclick="testWithDemo()" class="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-xl transition-colors">
+                        🧪 Показать тестовый чек
+                    </button>
+
+                    <button onclick="manualInput()" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 px-6 rounded-xl transition-colors">
+                        ✏️ Ввести URL чека вручную
+                    </button>
+                </div>
+
+                <!-- Manual Input -->
+                <div id="manual-screen" class="hidden space-y-4">
+                    <div class="bg-blue-50 border border-blue-200 p-4 rounded-lg">
+                        <p class="text-sm text-blue-800 mb-3">Вставьте URL чека (например: https://...)</p>
+                        <input type="text" id="manual-url" placeholder="https://check.soliq.uz/..." class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    </div>
+                    <button onclick="loadManualURL()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-xl transition-colors flex items-center justify-center">
+                        <span id="manual-loading" class="hidden loading-spinner"></span>
+                        Загрузить чек
+                    </button>
+                    <button onclick="showScreen('initial-screen')" class="w-full bg-gray-400 hover:bg-gray-500 text-white font-semibold py-3 px-6 rounded-xl transition-colors">
+                        Отмена
+                    </button>
+                </div>
+
+                <!-- Camera screen -->
+                <div id="camera-screen" class="hidden space-y-4">
+                    <div class="bg-yellow-50 border border-yellow-200 p-3 rounded-lg mb-4">
+                        <p class="text-sm text-yellow-800">📱 Наведите камеру на QR-код и держите неподвижно</p>
+                    </div>
+                    <div class="relative rounded-xl overflow-hidden bg-black">
+                        <video id="video" class="w-full" autoplay playsinline></video>
+                        <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                            <div class="w-64 h-64 border-4 border-white rounded-lg shadow-lg scan-animation"></div>
+                        </div>
+                        <div class="absolute top-2 right-2 bg-black bg-opacity-50 text-white px-3 py-1 rounded-full text-sm">
+                            <span id="scan-status">🔍 Поиск QR-кода...</span>
+                        </div>
+                        <div class="absolute bottom-2 left-2 right-2">
+                            <div class="progress-bar">
+                                <div id="scan-progress" class="progress-fill" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <button onclick="stopScanning()" class="w-full bg-red-600 hover:bg-red-700 text-white font-semibold py-3 px-6 rounded-xl flex items-center justify-center gap-2 transition-colors">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                        Отменить
+                    </button>
+                </div>
+
+                <!-- Loading screen -->
+                <div id="loading-screen" class="hidden space-y-6 text-center py-12">
+                    <div class="flex justify-center">
+                        <div class="loading-spinner" style="width: 48px; height: 48px;"></div>
+                    </div>
+                    <h3 class="text-xl font-semibold text-gray-700">Загрузка чека...</h3>
+                    <p class="text-gray-500" id="loading-text">Пожалуйста, подождите</p>
+                    <div class="progress-bar mx-auto max-w-md">
+                        <div id="loading-progress" class="progress-fill" style="width: 0%"></div>
+                    </div>
+                </div>
+
+                <!-- Receipt screen -->
+                <div id="receipt-screen" class="hidden space-y-6"></div>
+
+                <!-- Error message -->
+                <div id="error-message" class="hidden bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl"></div>
+            </div>
+        </div>
+    </div>
+
+    <canvas id="canvas" class="hidden"></canvas>
+    <div id="debug"></div>
+
+    <!-- jsQR library - load from multiple sources -->
+    <script src="https://unpkg.com/jsqr@1.4.0/dist/jsQR.js"></script>
+
+    <script>
+        let stream = null;
+        let scanInterval = null;
+        let scanCount = 0;
+        let lastScanTime = 0;
+        const debugMode = true;
+        const SCAN_INTERVAL = 500; // Увеличили интервал для производительности
+        const MIN_SCAN_INTERVAL = 300; // Минимальное время между сканированиями
+
+        function log(message) {
+            if (debugMode) {
+                const debug = document.getElementById('debug');
+                debug.classList.remove('hidden');
+                const time = new Date().toLocaleTimeString();
+                debug.innerHTML = `[${time}] ${message}<br>` + debug.innerHTML;
+                console.log(message);
+            }
+        }
+
+        function showScreen(screenId) {
+            document.getElementById('initial-screen').classList.add('hidden');
+            document.getElementById('manual-screen').classList.add('hidden');
+            document.getElementById('camera-screen').classList.add('hidden');
+            document.getElementById('loading-screen').classList.add('hidden');
+            document.getElementById('receipt-screen').classList.add('hidden');
+            document.getElementById('error-message').classList.add('hidden');
+            
+            if (screenId) {
+                document.getElementById(screenId).classList.remove('hidden');
+            }
+        }
+
+        function showLoading(text = 'Загрузка...') {
+            document.getElementById('loading-text').textContent = text;
+            updateProgress('loading-progress', 0);
+            showScreen('loading-screen');
+        }
+
+        function updateProgress(elementId, percentage) {
+            const progress = document.getElementById(elementId);
+            if (progress) {
+                progress.style.width = percentage + '%';
+            }
+        }
+
+        function showError(message) {
+            const errorEl = document.getElementById('error-message');
+            errorEl.textContent = message;
+            errorEl.classList.remove('hidden');
+            log('ERROR: ' + message);
+        }
+
+        function updateScanStatus(message, emoji = '🔍') {
+            const status = document.getElementById('scan-status');
+            if (status) {
+                status.textContent = emoji + ' ' + message;
+            }
+        }
+
+        function manualInput() {
+            showScreen('manual-screen');
+            document.getElementById('manual-url').value = '';
+        }
+
+        async function loadManualURL() {
+            const url = document.getElementById('manual-url').value.trim();
+            if (!url) {
+                showError('Введите URL');
+                return;
+            }
+            
+            if (!url.startsWith('http')) {
+                showError('URL должен начинаться с http:// или https://');
+                return;
+            }
+
+            const button = document.querySelector('#manual-screen button');
+            const loading = document.getElementById('manual-loading');
+            
+            button.disabled = true;
+            loading.classList.remove('hidden');
+            
+            log('Загрузка URL: ' + url);
+            try {
+                showLoading('Загрузка данных чека...');
+                updateProgress('loading-progress', 30);
+                
+                // Try direct fetch first
+                let response;
+                try {
+                    response = await fetch(url);
+                    if (!response.ok) throw new Error('Direct fetch failed');
+                } catch (directErr) {
+                    log('Прямой запрос не удался, используем прокси...');
+                    updateProgress('loading-progress', 50);
+                    response = await fetch('https://api.allorigins.win/raw?url=' + encodeURIComponent(url));
+                }
+                
+                updateProgress('loading-progress', 80);
+                const html = await response.text();
+                log('HTML загружен, длина: ' + html.length);
+                updateProgress('loading-progress', 100);
+                
+                parseReceiptHTML(html);
+            } catch (err) {
+                log('Ошибка загрузки: ' + err.message);
+                showError('Не удалось загрузить чек. Попробуйте открыть ссылку в браузере.');
+                
+                const errorEl = document.getElementById('error-message');
+                errorEl.innerHTML = `
+                    <p class="mb-2">Не удалось загрузить чек: ${err.message}</p>
+                    <a href="${url}" target="_blank" class="inline-block bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
+                        Открыть чек в новой вкладке
+                    </a>
+                `;
+                showScreen('initial-screen');
+            } finally {
+                button.disabled = false;
+                loading.classList.add('hidden');
+            }
+        }
+
+        async function startCamera() {
+            // Check if jsQR is loaded
+            if (typeof jsQR === 'undefined') {
+                log('jsQR не загружен, ждем...');
+                showError('Библиотека сканирования загружается...');
+                setTimeout(() => {
+                    if (typeof jsQR === 'undefined') {
+                        showError('Библиотека сканирования не загружена. Попробуйте загрузить изображение или ввести URL вручную.');
+                        return;
+                    }
+                    startCamera();
+                }, 1000);
+                return;
+            }
+
+            log('Запрос доступа к камере...');
+            try {
+                showScreen('camera-screen');
+                updateProgress('scan-progress', 10);
+                
+                const constraints = {
+                    video: { 
+                        facingMode: 'environment',
+                        width: { ideal: 640 }, // Уменьшили разрешение для производительности
+                        height: { ideal: 480 },
+                        frameRate: { ideal: 15 } // Ограничили FPS
+                    }
+                };
+                
+                log('Constraints: ' + JSON.stringify(constraints));
+                updateProgress('scan-progress', 30);
+                stream = await navigator.mediaDevices.getUserMedia(constraints);
+                log('✅ Камера получена!');
+                updateProgress('scan-progress', 60);
+                
+                const video = document.getElementById('video');
+                video.srcObject = stream;
+                
+                video.onloadedmetadata = () => {
+                    log('Метаданные видео загружены');
+                    video.play();
+                    log('Видео запущено: ' + video.videoWidth + 'x' + video.videoHeight);
+                    updateProgress('scan-progress', 100);
+                    setTimeout(() => {
+                        startQRScanning();
+                    }, 500);
+                };
+            } catch (err) {
+                log('Ошибка камеры: ' + err.message);
+                showScreen('initial-screen');
+                showError('Не удалось получить доступ к камере: ' + err.message);
+            }
+        }
+
+        function startQRScanning() {
+            if (typeof jsQR === 'undefined') {
+                log('❌ jsQR недоступен при старте сканирования!');
+                showError('Ошибка инициализации сканера');
+                stopScanning();
+                return;
+            }
+            
+            log('✅ Запуск сканирования QR (jsQR доступен)...');
+            scanCount = 0;
+            lastScanTime = 0;
+            scanInterval = setInterval(() => {
+                scanQRCode();
+            }, SCAN_INTERVAL);
+        }
+
+        function scanQRCode() {
+            const now = Date.now();
+            if (now - lastScanTime < MIN_SCAN_INTERVAL) {
+                return; // Пропускаем сканирование если прошло мало времени
+            }
+            
+            const video = document.getElementById('video');
+            const canvas = document.getElementById('canvas');
+            const context = canvas.getContext('2d');
+
+            if (video.readyState === video.HAVE_ENOUGH_DATA && video.videoWidth > 0) {
+                scanCount++;
+                lastScanTime = now;
+                
+                // Оптимизация: уменьшаем размер для сканирования
+                const scale = 0.7;
+                canvas.height = video.videoHeight * scale;
+                canvas.width = video.videoWidth * scale;
+                
+                context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                
+                const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+                
+                if (typeof jsQR !== 'undefined') {
+                    const code = jsQR(imageData.data, imageData.width, imageData.height, {
+                        inversionAttempts: "dontInvert",
+                    });
+                    
+                    if (code) {
+                        log('✅ QR НАЙДЕН! ' + code.data.substring(0, 60));
+                        updateScanStatus('QR найден!', '✅');
+                        updateProgress('scan-progress', 100);
+                        handleQRCodeDetected(code.data);
+                    } else {
+                        // Обновляем статус каждые 5 сканирований
+                        if (scanCount % 5 === 0) {
+                            const progress = Math.min(10 + (scanCount % 90), 95);
+                            updateProgress('scan-progress', progress);
+                            updateScanStatus(`Сканирование... (${scanCount})`, '🔍');
+                            log(`Попытка ${scanCount}...`);
+                        }
+                    }
+                } else {
+                    log('❌ jsQR недоступен!');
+                    showError('Ошибка библиотеки сканирования');
+                    stopScanning();
+                }
+            }
+        }
+
+        function stopScanning() {
+            log('Остановка сканирования');
+            if (scanInterval) {
+                clearInterval(scanInterval);
+                scanInterval = null;
+            }
+            
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+            }
+            
+            showScreen('initial-screen');
+        }
+
+        async function handleQRCodeDetected(qrData) {
+            log('Обработка: ' + qrData);
+            stopScanning();
+            
+            if (qrData.startsWith('http')) {
+                log('Это URL, загружаю...');
+                showLoading('Загрузка данных чека...');
+                
+                try {
+                    updateProgress('loading-progress', 20);
+                    
+                    // Try direct fetch first
+                    let response;
+                    try {
+                        response = await fetch(qrData);
+                        if (!response.ok) throw new Error('Direct fetch failed');
+                    } catch (directErr) {
+                        log('Прямой запрос не удался, используем прокси...');
+                        updateProgress('loading-progress', 40);
+                        // Use CORS proxy
+                        response = await fetch('https://api.allorigins.win/raw?url=' + encodeURIComponent(qrData));
+                    }
+                    
+                    updateProgress('loading-progress', 70);
+                    const html = await response.text();
+                    log('HTML загружен: ' + html.length + ' байт');
+                    updateProgress('loading-progress', 90);
+                    parseReceiptHTML(html);
+                } catch (err) {
+                    log('Ошибка: ' + err.message);
+                    showError('Не удалось загрузить чек. Попробуйте открыть ссылку напрямую: ' + qrData);
+                    
+                    // Show link to open directly
+                    const errorEl = document.getElementById('error-message');
+                    errorEl.innerHTML = `
+                        <p class="mb-2">Не удалось загрузить чек автоматически.</p>
+                        <a href="${qrData}" target="_blank" class="inline-block bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
+                            Открыть чек в новой вкладке
+                        </a>
+                    `;
+                    showScreen('initial-screen');
+                }
+            } else {
+                displayDemoReceipt();
+            }
+        }
+
+        function parseReceiptHTML(html) {
+            log('Парсинг HTML...');
+            showLoading('Обработка данных...');
+            
+            // Используем setTimeout чтобы дать интерфейсу обновиться
+            setTimeout(() => {
+                try {
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(html, 'text/html');
+                    
+                    updateProgress('loading-progress', 30);
+                    
+                    // Company name - ищем h3 с font-weight: bold
+                    let companyName = 'Неизвестно';
+                    const h3Elements = doc.querySelectorAll('h3');
+                    for (let h3 of h3Elements) {
+                        const style = h3.getAttribute('style') || '';
+                        if (style.includes('font-weight') && style.includes('bold')) {
+                            companyName = h3.textContent.trim();
+                            break;
+                        }
+                    }
+                    log('Компания: ' + companyName);
+                    
+                    updateProgress('loading-progress', 50);
+                    
+                    // Receipt number - первый <b> в <td>
+                    let receiptNumber = 'N/A';
+                    const allBoldInTd = doc.querySelectorAll('td b');
+                    if (allBoldInTd.length > 0) {
+                        receiptNumber = allBoldInTd[0].textContent.trim();
+                    }
+                    log('Чек №: ' + receiptNumber);
+                    
+                    // Date/time - первый <i> в <td>
+                    let dateTime = 'N/A';
+                    const allItalicInTd = doc.querySelectorAll('td i');
+                    for (let italic of allItalicInTd) {
+                        const text = italic.textContent.trim();
+                        // Проверяем что это дата (содержит цифры и точки/запятые)
+                        if (text.match(/\d{2}\.\d{2}\.\d{4}/)) {
+                            dateTime = text;
+                            break;
+                        }
+                    }
+                    log('Дата: ' + dateTime);
+                    
+                    updateProgress('loading-progress', 70);
+                    
+                    // Products - ищем все строки с классом products-row
+                    const products = [];
+                    const productRows = doc.querySelectorAll('tr.products-row');
+                    log('Найдено products-row: ' + productRows.length);
+                    
+                    productRows.forEach((row, index) => {
+                        // В каждой products-row: 
+                        // td[0] = название
+                        // td[1] = количество (с align="center")
+                        // td[2] = цена (с классом price-sum)
+                        const nameTd = row.querySelector('td:first-child');
+                        const quantityTd = row.querySelector('td[align="center"]');
+                        const priceTd = row.querySelector('td.price-sum');
+                        
+                        if (nameTd && quantityTd && priceTd) {
+                            const product = {
+                                name: nameTd.textContent.trim(),
+                                quantity: quantityTd.textContent.trim(),
+                                price: priceTd.textContent.trim()
+                            };
+                            products.push(product);
+                        }
+                    });
+                    
+                    log('Всего товаров: ' + products.length);
+                    
+                    updateProgress('loading-progress', 90);
+                    
+                    // Total - ищем "Jami to`lov:"
+                    let total = '0';
+                    const allTds = Array.from(doc.querySelectorAll('td'));
+                    for (let i = 0; i < allTds.length; i++) {
+                        const td = allTds[i];
+                        if (td.textContent.includes('Jami to`lov')) {
+                            // Следующая ячейка содержит сумму
+                            if (i + 1 < allTds.length) {
+                                total = allTds[i + 1].textContent.trim();
+                                break;
+                            }
+                        }
+                    }
+                    log('Итого: ' + total);
+                    
+                    updateProgress('loading-progress', 100);
+                    
+                    if (products.length > 0) {
+                        setTimeout(() => {
+                            displayReceipt({ companyName, receiptNumber, dateTime, products, total });
+                        }, 300);
+                    } else {
+                        log('❌ Товары не найдены!');
+                        showError('Не удалось распарсить чек. Попробуйте другой чек или откройте ссылку в браузере.');
+                        showScreen('initial-screen');
+                    }
+                } catch (err) {
+                    log('Ошибка парсинга: ' + err.message);
+                    showError('Ошибка обработки данных чека: ' + err.message);
+                    showScreen('initial-screen');
+                }
+            }, 100);
+        }
+
+        function displayDemoReceipt() {
+            displayReceipt({
+                companyName: '"SAID FIRST" MCHJ',
+                receiptNumber: 'NA000000046459',
+                dateTime: '04.07.2025, 18:34',
+                products: [
+                    { name: 'Бензин марки АИ-95', quantity: '20 л', price: '236,000.00' }
+                ],
+                total: '236,000.00'
+            });
+        }
+
+        function displayReceipt(data) {
+            log('✅ Отображение чека');
+            const receiptScreen = document.getElementById('receipt-screen');
+            
+            let productsHTML = data.products.map(p => `
+                <div class="bg-gray-50 p-4 rounded-lg hover:bg-gray-100 transition-colors">
+                    <div class="flex justify-between items-start gap-4">
+                        <div class="flex-1">
+                            <p class="font-medium text-gray-800">${p.name}</p>
+                            <p class="text-sm text-gray-500 mt-1">Количество: ${p.quantity}</p>
+                        </div>
+                        <div class="text-right">
+                            <p class="font-bold text-lg text-blue-600">${p.price} сум</p>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+            
+            receiptScreen.innerHTML = `
+                <div class="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-xl">
+                    <div class="flex items-start gap-3">
+                        <svg class="w-6 h-6 text-blue-600 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+                        </svg>
+                        <div class="flex-1">
+                            <h2 class="font-bold text-xl text-gray-800">${data.companyName}</h2>
+                            <div class="mt-2 space-y-1 text-sm">
+                                <p class="text-gray-600"><span class="font-semibold">Чек:</span> ${data.receiptNumber}</p>
+                                <p class="text-gray-600">${data.dateTime}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <h3 class="font-bold text-lg text-gray-800 mb-3 flex items-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                        </svg>
+                        Товары
+                    </h3>
+                    <div class="space-y-2">${productsHTML}</div>
+                </div>
+
+                <div class="bg-gradient-to-r from-green-50 to-emerald-50 p-5 rounded-xl border-2 border-green-200">
+                    <div class="flex justify-between items-center">
+                        <span class="text-xl font-bold text-gray-800">Итого:</span>
+                        <span class="text-2xl font-bold text-green-600">${data.total} сум</span>
+                    </div>
+                </div>
+
+                <button onclick="reset()" class="w-full bg-gray-600 hover:bg-gray-700 text-white font-semibold py-3 px-6 rounded-xl transition-colors">
+                    Сканировать новый чек
+                </button>
+            `;
+            
+            showScreen('receipt-screen');
+        }
+
+        function handleFileUpload(event) {
+            const file = event.target.files?.[0];
+            if (!file) return;
+
+            log('Загрузка файла: ' + file.name);
+            showLoading('Анализ изображения...');
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                updateProgress('loading-progress', 50);
+                const img = new Image();
+                img.onload = () => {
+                    log('Изображение: ' + img.width + 'x' + img.height);
+                    updateProgress('loading-progress', 70);
+                    const canvas = document.getElementById('canvas');
+                    const ctx = canvas.getContext('2d');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    ctx.drawImage(img, 0, 0);
+                    
+                    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    
+                    if (typeof jsQR !== 'undefined') {
+                        updateProgress('loading-progress', 90);
+                        const code = jsQR(imageData.data, imageData.width, imageData.height);
+                        if (code) {
+                            log('✅ QR найден!');
+                            updateProgress('loading-progress', 100);
+                            setTimeout(() => {
+                                handleQRCodeDetected(code.data);
+                            }, 300);
+                        } else {
+                            showError('QR-код не найден на изображении');
+                            showScreen('initial-screen');
+                        }
+                    } else {
+                        showError('Библиотека не загружена');
+                        showScreen('initial-screen');
+                    }
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function testWithDemo() {
+            log('Тестовый чек');
+            showLoading('Загрузка тестового чека...');
+            setTimeout(() => {
+                updateProgress('loading-progress', 100);
+                setTimeout(() => {
+                    displayDemoReceipt();
+                }, 300);
+            }, 800);
+        }
+
+        function reset() {
+            showScreen('initial-screen');
+        }
+
+        window.onload = () => {
+            log('🚀 Приложение загружено');
+            setTimeout(() => {
+                log('jsQR: ' + (typeof jsQR !== 'undefined' ? '✅' : '❌'));
+                log('Camera: ' + (!!navigator.mediaDevices?.getUserMedia ? '✅' : '❌'));
+            }, 500);
+        };
+    </script>
+</body>
+</html>
