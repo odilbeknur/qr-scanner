@@ -10,14 +10,8 @@ import os
 
 app = FastAPI()
 
-# Определяем путь к шаблонам в зависимости от окружения
-if os.path.exists("templates"):
-    # Локальная разработка
-    template_path = Path("templates")
-else:
-    # Продакшен на Vercel
-    template_path = Path(__file__).parent / "templates"
-
+# Путь к шаблонам
+template_path = Path(__file__).parent / "templates"
 templates = Jinja2Templates(directory=str(template_path))
 
 # Временное хранилище (данные пропадут при рестарте)
