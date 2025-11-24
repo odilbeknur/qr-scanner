@@ -9,39 +9,52 @@ from pathlib import Path
 import os
 
 app = FastAPI(title="QR Receipt Scanner")
-templates = Jinja2Templates(directory="templates")
+
+# Путь к templates
+template_dir = os.path.join(os.path.dirname(__file__), "templates")
+templates = Jinja2Templates(directory=template_dir)
 
 # Для Vercel используем /tmp директорию
 RECEIPTS_FILE = Path("/tmp/receipts.json")
 
 def load_receipts():
-    if RECEIPTS_FILE.exists():
-        with open(RECEIPTS_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
+    try:
+        if RECEIPTS_FILE.exists():
+            with open(RECEIPTS_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+    except Exception as e:
+        print(f"Error loading receipts: {e}")
     return []
 
 def save_receipt(receipt_data):
-    receipts = load_receipts()
-    receipt_data['scanned_at'] = datetime.now().isoformat()
-    receipt_data['id'] = len(receipts) + 1
-    receipts.insert(0, receipt_data)
-    
-    # Создаем директорию если не существует
-    RECEIPTS_FILE.parent.mkdir(parents=True, exist_ok=True)
-    
-    with open(RECEIPTS_FILE, 'w', encoding='utf-8') as f:
-        json.dump(receipts, f, ensure_ascii=False, indent=2)
-    
-    return receipt_data
+    try:
+        receipts = load_receipts()
+        receipt_data['scanned_at'] = datetime.now().isoformat()
+        receipt_data['id'] = len(receipts) + 1
+        receipts.insert(0, receipt_data)
+        
+        # Создаем директорию если не существует
+        RECEIPTS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        
+        with open(RECEIPTS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(receipts, f, ensure_ascii=False, indent=2)
+        
+        return receipt_data
+    except Exception as e:
+        print(f"Error saving receipt: {e}")
+        return receipt_data
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
-    receipts = load_receipts()
-    return templates.TemplateResponse("index.html", {
-        "request": request,
-        "receipts": receipts,
-        "receipts_json": json.dumps(receipts, ensure_ascii=False)
-    })
+    try:
+        receipts = load_receipts()
+        return templates.TemplateResponse("index.html", {
+            "request": request,
+            "receipts": receipts,
+            "receipts_json": json.dumps(receipts, ensure_ascii=False)
+        })
+    except Exception as e:
+        return HTMLResponse(f"<h1>Error: {str(e)}</h1><p>Check logs for details</p>", status_code=500)
 
 @app.get("/api/receipts")
 async def get_receipts():
@@ -49,13 +62,16 @@ async def get_receipts():
 
 @app.delete("/api/receipts/{receipt_id}")
 async def delete_receipt(receipt_id: int):
-    receipts = load_receipts()
-    receipts = [r for r in receipts if r.get('id') != receipt_id]
-    
-    with open(RECEIPTS_FILE, 'w', encoding='utf-8') as f:
-        json.dump(receipts, f, ensure_ascii=False, indent=2)
-    
-    return JSONResponse({"success": True})
+    try:
+        receipts = load_receipts()
+        receipts = [r for r in receipts if r.get('id') != receipt_id]
+        
+        with open(RECEIPTS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(receipts, f, ensure_ascii=False, indent=2)
+        
+        return JSONResponse({"success": True})
+    except Exception as e:
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
 
 @app.get("/api/fetch-receipt")
 async def fetch_receipt(url: str):
@@ -136,5 +152,9 @@ async def fetch_receipt(url: str):
             "error": str(e)
         }, status_code=400)
 
+@app.get("/health")
+async def health():
+    return {"status": "ok", "template_dir": template_dir, "exists": os.path.exists(template_dir)}
+
 # Для Vercel
-handler = app
+app = app
