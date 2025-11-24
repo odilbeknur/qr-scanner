@@ -118,6 +118,8 @@ async def health():
         "template_path": str(template_path),
         "exists": template_path.exists()
     }
-
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
 # Для Vercel (ОБЯЗАТЕЛЬНО!)
 handler = app
