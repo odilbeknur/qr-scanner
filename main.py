@@ -10,11 +10,17 @@ import os
 
 app = FastAPI(title="QR Receipt Scanner")
 
-# Путь к templates
-template_dir = os.path.join(os.path.dirname(__file__), "templates")
-templates = Jinja2Templates(directory=template_dir)
+# Определяем путь к templates относительно этого файла
+BASE_DIR = Path(__file__).resolve().parent
+TEMPLATE_DIR = BASE_DIR / "templates"
 
-# Для Vercel используем /tmp директорию
+# Если нет templates рядом, проверяем в корне проекта
+if not TEMPLATE_DIR.exists():
+    TEMPLATE_DIR = Path("/var/task/templates")
+
+templates = Jinja2Templates(directory=str(TEMPLATE_DIR))
+
+# Временное хранилище (для Vercel)
 RECEIPTS_FILE = Path("/tmp/receipts.json")
 
 def load_receipts():
@@ -33,7 +39,6 @@ def save_receipt(receipt_data):
         receipt_data['id'] = len(receipts) + 1
         receipts.insert(0, receipt_data)
         
-        # Создаем директорию если не существует
         RECEIPTS_FILE.parent.mkdir(parents=True, exist_ok=True)
         
         with open(RECEIPTS_FILE, 'w', encoding='utf-8') as f:
@@ -54,7 +59,19 @@ async def index(request: Request):
             "receipts_json": json.dumps(receipts, ensure_ascii=False)
         })
     except Exception as e:
-        return HTMLResponse(f"<h1>Error: {str(e)}</h1><p>Check logs for details</p>", status_code=500)
+        return HTMLResponse(
+            f"<h1>Error</h1><p>{str(e)}</p><p>Template dir: {TEMPLATE_DIR}</p><p>Exists: {TEMPLATE_DIR.exists()}</p>",
+            status_code=500
+        )
+
+@app.get("/api/health")
+async def health():
+    return {
+        "status": "ok",
+        "template_dir": str(TEMPLATE_DIR),
+        "exists": TEMPLATE_DIR.exists(),
+        "base_dir": str(BASE_DIR)
+    }
 
 @app.get("/api/receipts")
 async def get_receipts():
@@ -75,7 +92,6 @@ async def delete_receipt(receipt_id: int):
 
 @app.get("/api/fetch-receipt")
 async def fetch_receipt(url: str):
-    """Прокси для загрузки чека и обхода CORS"""
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.get(url)
@@ -84,19 +100,16 @@ async def fetch_receipt(url: str):
             
             soup = BeautifulSoup(html, 'html.parser')
             
-            # Компания
             company = "Неизвестно"
             h3_bold = soup.find('h3', style=lambda x: x and 'font-weight' in x and 'bold' in x)
             if h3_bold:
                 company = h3_bold.get_text(strip=True)
             
-            # Номер чека
             receipt_num = "N/A"
             first_b = soup.find('td').find('b') if soup.find('td') else None
             if first_b:
                 receipt_num = first_b.get_text(strip=True)
             
-            # Дата
             date_time = "N/A"
             for italic in soup.find_all('i'):
                 text = italic.get_text(strip=True)
@@ -104,7 +117,6 @@ async def fetch_receipt(url: str):
                     date_time = text
                     break
             
-            # Товары
             products = []
             product_rows = soup.find_all('tr', class_='products-row')
             
@@ -120,7 +132,6 @@ async def fetch_receipt(url: str):
                         'price': price_td.get_text(strip=True)
                     })
             
-            # Итого
             total = "0"
             for td in soup.find_all('td'):
                 if 'Jami to`lov' in td.get_text():
@@ -138,7 +149,6 @@ async def fetch_receipt(url: str):
                 "total": total
             }
             
-            # Сохранить в архив
             saved = save_receipt(receipt_data)
             
             return JSONResponse({
@@ -151,10 +161,3 @@ async def fetch_receipt(url: str):
             "success": False,
             "error": str(e)
         }, status_code=400)
-
-@app.get("/health")
-async def health():
-    return {"status": "ok", "template_dir": template_dir, "exists": os.path.exists(template_dir)}
-
-# Для Vercel
-app = app
