@@ -11,181 +11,66 @@ import os
 
 app = FastAPI()
 
-# Путь к шаблонам
 template_path = Path(__file__).parent / "templates"
 templates = Jinja2Templates(directory=str(template_path))
 
-# Временное хранилище
 receipts_storage = []
-
-# Кэш категорий (чтобы не спрашивать AI повторно)
 category_cache = {}
 
-# Основные категории
 CATEGORIES = {
-    "🍬 Сладости": "сладости, десерты, печенье, шоколад, конфеты",
-    "🥤 Напитки": "напитки, вода, сок, газировка, чай, кофе",
-    "🍞 Хлеб и выпечка": "хлеб, булки, выпечка, батоны",
-    "🥛 Молочные продукты": "молоко, кефир, йогурт, сыр, творог",
-    "🥩 Мясо и рыба": "мясо, курица, рыба, колбаса",
-    "🥗 Овощи и фрукты": "овощи, фрукты, зелень",
-    "🍝 Крупы и макароны": "крупы, макароны, рис, гречка",
-    "💊 Медицина и гигиена": "лекарства, витамины, шампунь, мыло",
-    "🧹 Бытовая химия": "моющие средства, порошок, пакеты",
-    "🎁 Другое": "прочие товары"
+    "🍬 Сладости": "сладости",
+    "🥤 Напитки": "напитки",
+    "🍞 Хлеб и выпечка": "хлеб",
+    "🥛 Молочные продукты": "молочные",
+    "🥩 Мясо и рыба": "мясо",
+    "🥗 Овощи и фрукты": "овощи",
+    "🍝 Крупы и макароны": "крупы",
+    "💊 Медицина и гигиена": "медицина",
+    "🧹 Бытовая химия": "химия",
+    "🎁 Другое": "другое"
 }
 
-async def categorize_with_ai(product_name):
-    """Категоризация через Gemini API"""
-    
-    # Проверяем кэш
-    name_lower = product_name.lower()
-    if name_lower in category_cache:
-        return category_cache[name_lower]
-    
-    # Простая эвристика (без AI для базовых случаев)
-    category = categorize_simple(product_name)
-    if category != "🎁 Другое":
-        category_cache[name_lower] = category
-        return category
-    
-    # Используем Gemini AI для сложных случаев
-    api_key = os.getenv("   ", "")
-    if not api_key:
-        category_cache[name_lower] = category
-        return category
-    
-    try:
-        categories_text = ", ".join([f"{cat}" for cat in CATEGORIES.keys() if cat != "🎁 Другое"])
-        
-        prompt = f"""Определи категорию товара. Отвечай ТОЛЬКО названием категории из списка.
-
-Категории: {categories_text}
-
-Товар: {product_name}
-
-Ответ (только категория с эмодзи):"""
-
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.post(
-                f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}",
-                headers={"Content-Type": "application/json"},
-                json={
-                    "contents": [{
-                        "parts": [{"text": prompt}]
-                    }],
-                    "generationConfig": {
-                        "temperature": 0.1,
-                        "maxOutputTokens": 20
-                    }
-                }
-            )
-            
-            if response.status_code == 200:
-                result = response.json()
-                ai_response = result["candidates"][0]["content"]["parts"][0]["text"].strip()
-                
-                # Находим категорию
-                for cat_name in CATEGORIES.keys():
-                    if cat_name in ai_response or ai_response in cat_name:
-                        category_cache[name_lower] = cat_name
-                        return cat_name
-    except Exception as e:
-        print(f"AI error: {e}")
-    
-    # Fallback на простую категоризацию
-    category_cache[name_lower] = category
-    return category
-
 def categorize_simple(product_name):
-    """Простая категоризация по ключевым словам"""
     name_lower = product_name.lower()
     
-    # Сладости
-    if any(word in name_lower for word in [
-        'печенье', 'шоколад', 'конфет', 'торт', 'пирожн', 'вафл', 'браун',
-        'pechenye', 'shokolad', 'brauni', 'cushion', 'cookie', 'cake'
-    ]):
+    if any(w in name_lower for w in ['печенье', 'шоколад', 'конфет', 'торт', 'пирожн', 'вафл', 'браун', 'pechenye', 'shokolad', 'brauni', 'cushion']):
         return "🍬 Сладости"
     
-    # Напитки
-    if any(word in name_lower for word in [
-        'сок', 'вод', 'чай', 'кофе', 'лимонад', 'cola', 'fanta', 'sprite',
-        'ichimlik', 'drink', 'напит', 'juice', 'dyushes', 'pet'
-    ]):
+    if any(w in name_lower for w in ['сок', 'вод', 'чай', 'кофе', 'лимонад', 'cola', 'fanta', 'sprite', 'ichimlik', 'dyushes', 'pet']):
         return "🥤 Напитки"
     
-    # Хлеб
-    if any(word in name_lower for word in [
-        'хлеб', 'батон', 'булк', 'лаваш', 'non', 'bread', 'хрус', 'bar'
-    ]):
+    if any(w in name_lower for w in ['хлеб', 'батон', 'булк', 'лаваш', 'non', 'хрус', 'nonqoqi']):
         return "🍞 Хлеб и выпечка"
     
-    # Молочка
-    if any(word in name_lower for word in [
-        'молоко', 'кефир', 'йогурт', 'сметан', 'творог', 'сыр', 'масл',
-        'sut', 'yogurt', 'milk', 'cheese'
-    ]):
+    if any(w in name_lower for w in ['молоко', 'кефир', 'йогурт', 'сметан', 'творог', 'сыр', 'масл', 'sut', 'yogurt']):
         return "🥛 Молочные продукты"
     
-    # Мясо/рыба
-    if any(word in name_lower for word in [
-        'мясо', 'куриц', 'говяд', 'рыб', 'колбас', 'сосиск',
-        'go\'sht', 'tovuq', 'baliq', 'meat', 'chicken'
-    ]):
+    if any(w in name_lower for w in ['мясо', 'куриц', 'говяд', 'рыб', 'колбас', 'сосиск', "go'sht", 'tovuq', 'baliq']):
         return "🥩 Мясо и рыба"
     
-    # Овощи/фрукты
-    if any(word in name_lower for word in [
-        'помидор', 'огурец', 'картоф', 'морков', 'яблок', 'банан',
-        'sabzavot', 'meva', 'fruit', 'vegetable'
-    ]):
+    if any(w in name_lower for w in ['помидор', 'огурец', 'картоф', 'морков', 'яблок', 'банан', 'sabzavot', 'meva']):
         return "🥗 Овощи и фрукты"
     
-    # Крупы
-    if any(word in name_lower for word in [
-        'рис', 'гречк', 'макарон', 'спагетт', 'мука', 'паста',
-        'guruch', 'makaron', 'pasta', 'rice'
-    ]):
+    if any(w in name_lower for w in ['рис', 'гречк', 'макарон', 'спагетт', 'мука', 'паста', 'guruch', 'makaron']):
         return "🍝 Крупы и макароны"
     
-    # Медицина/гигиена
-    if any(word in name_lower for word in [
-        'лекарств', 'таблетк', 'витамин', 'мазь', 'шампун', 'мыло', 'зубн',
-        'dori', 'shampon', 'sovun', 'medicine'
-    ]):
+    if any(w in name_lower for w in ['лекарств', 'таблетк', 'витамин', 'мазь', 'шампун', 'мыло', 'зубн', 'dori', 'shampon']):
         return "💊 Медицина и гигиена"
     
-    # Бытовая химия
-    if any(word in name_lower for word in [
-        'порошок', 'чист', 'средств', 'пакет', 'sumka', 'polieti',
-        'paket', 'bag', 'логотипл', 'bio'
-    ]):
+    if any(w in name_lower for w in ['порошок', 'чист', 'средств', 'пакет', 'sumka', 'polieti', 'paket', 'логотипл', 'bio']):
         return "🧹 Бытовая химия"
     
     return "🎁 Другое"
 
-def categorize_product(product_name):
-    """Синхронная обертка для категоризации"""
-    return categorize_simple(product_name)
-
 def parse_price(price_str):
-    """Извлекает числовое значение из строки цены"""
     try:
-        # Удаляем всё кроме цифр, точек и запятых
-        clean = re.sub(r'[^\d,.]', '', price_str)
-        # Заменяем запятую на точку
-        clean = clean.replace(',', '')
+        clean = re.sub(r'[^\d,.]', '', price_str).replace(',', '')
         return float(clean)
     except:
         return 0.0
 
 def calculate_statistics(receipts):
-    """Вычисляет статистику по категориям"""
-    category_stats = {}
-    for cat in CATEGORIES.keys():
-        category_stats[cat] = {"total": 0, "count": 0, "products": []}
-    
+    category_stats = {cat: {"total": 0, "count": 0, "products": []} for cat in CATEGORIES.keys()}
     total_spent = 0
     
     for receipt in receipts:
@@ -200,17 +85,10 @@ def calculate_statistics(receipts):
                 'price': price,
                 'receipt': receipt['receiptNumber']
             })
-            
             total_spent += price
     
-    # Удаляем пустые категории
-    category_stats = {k: v for k, v in category_stats.items() 
-                      if v['count'] > 0}
-    
-    # Сортируем по сумме (убывание)
-    category_stats = dict(sorted(category_stats.items(), 
-                                 key=lambda x: x[1]['total'], 
-                                 reverse=True))
+    category_stats = {k: v for k, v in category_stats.items() if v['count'] > 0}
+    category_stats = dict(sorted(category_stats.items(), key=lambda x: x[1]['total'], reverse=True))
     
     return {
         'categories': category_stats,
@@ -252,13 +130,11 @@ async def fetch_receipt(url: str):
             
         soup = BeautifulSoup(html, 'html.parser')
         
-        # Парсинг компании
         company = "Неизвестно"
         h3_bold = soup.find('h3', style=lambda x: x and 'font-weight' in x and 'bold' in x)
         if h3_bold:
             company = h3_bold.get_text(strip=True)
         
-        # Номер чека
         receipt_num = "N/A"
         first_b = soup.find('td')
         if first_b:
@@ -266,7 +142,6 @@ async def fetch_receipt(url: str):
             if first_b:
                 receipt_num = first_b.get_text(strip=True)
         
-        # Дата
         date_time = "N/A"
         for italic in soup.find_all('i'):
             text = italic.get_text(strip=True)
@@ -274,7 +149,6 @@ async def fetch_receipt(url: str):
                 date_time = text
                 break
         
-        # Товары
         products = []
         product_rows = soup.find_all('tr', class_='products-row')
         
@@ -289,10 +163,9 @@ async def fetch_receipt(url: str):
                     'name': product_name,
                     'quantity': qty_td.get_text(strip=True),
                     'price': price_td.get_text(strip=True),
-                    'category': categorize_product(product_name)
+                    'category': categorize_simple(product_name)
                 })
         
-        # Итого
         total = "0"
         for td in soup.find_all('td'):
             if 'Jami to`lov' in td.get_text():
@@ -328,5 +201,4 @@ async def health():
         "exists": template_path.exists()
     }
 
-# Для Vercel (ОБЯЗАТЕЛЬНО!)
 handler = app
