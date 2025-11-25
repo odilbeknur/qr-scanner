@@ -202,4 +202,4 @@ async def health():
     }
 
 # Для Vercel (ОБЯЗАТЕЛЬНО!)
-handler = app
+app = app
