@@ -270,7 +270,7 @@ async def health():
     }
 
 # Для Vercel (ОБЯЗАТЕЛЬНО!)
-handler = app
+app = app
 
 # Для локального запуска
 if __name__ == "__main__":
