@@ -271,12 +271,3 @@ async def health():
 
 # Для Vercel (ОБЯЗАТЕЛЬНО!)
 app = app
-
-# Для локального запуска
-if __name__ == "__main__":
-    import uvicorn
-    print("🚀 Запуск сервера на http://localhost:8000")
-    print("📊 Статистика: http://localhost:8000")
-    print("🏥 Health check: http://localhost:8000/health")
-    print("\n💡 Нажмите Ctrl+C для остановки\n")
-    uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)
