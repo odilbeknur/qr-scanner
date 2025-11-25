@@ -1,3 +1,4 @@
+<!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
@@ -67,7 +68,7 @@
                         <!-- Категории -->
                         <div class="grid md:grid-cols-2 gap-4">
                             {% for category, data in stats.categories.items() %}
-                            <div class="bg-gradient-to-br from-white to-gray-50 p-5 rounded-2xl border-2 border-gray-200 hover:border-purple-400 transition cursor-pointer" onclick="showCategoryDetails('{{ category }}', {{ data|tojson|safe }})">
+                            <div class="bg-gradient-to-br from-white to-gray-50 p-5 rounded-2xl border-2 border-gray-200 hover:border-purple-400 transition cursor-pointer" onclick='showCategoryDetails({{ {"name": category, "data": data}|tojson|safe }})'>
                                 <div class="flex justify-between items-start mb-3">
                                     <h3 class="text-lg font-bold text-gray-800">{{ category }}</h3>
                                     <span class="bg-purple-100 text-purple-600 px-3 py-1 rounded-full text-sm font-bold">
@@ -111,7 +112,6 @@
                 </div>
 
                 <div class="p-6">
-                    <!-- Buttons -->
                     <div id="initial-screen" class="space-y-4">
                         <button onclick="startScanner()" class="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-bold py-5 rounded-2xl transition transform hover:scale-105 shadow-lg">
                             <span class="text-2xl">📸</span>
@@ -132,7 +132,6 @@
                         </button>
                     </div>
 
-                    <!-- Scanner -->
                     <div id="scanner-screen" class="hidden">
                         <div class="mb-4 p-4 bg-gradient-to-r from-yellow-100 to-orange-100 border-2 border-yellow-400 rounded-2xl">
                             <p class="text-sm text-yellow-900 font-semibold text-center">
@@ -145,7 +144,6 @@
                         </button>
                     </div>
 
-                    <!-- Manual Input -->
                     <div id="manual-screen" class="hidden space-y-4">
                         <div class="relative">
                             <input type="text" id="manual-url" placeholder="https://ofd.soliq.uz/check?..." 
@@ -160,19 +158,15 @@
                         </button>
                     </div>
 
-                    <!-- Loading -->
                     <div id="loading-screen" class="hidden text-center py-16">
                         <div class="relative inline-block">
                             <div class="animate-spin rounded-full h-20 w-20 border-t-4 border-b-4 border-purple-600"></div>
-                            <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-3xl">
-                                ⏳
-                            </div>
+                            <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-3xl">⏳</div>
                         </div>
                         <p class="text-xl font-bold text-gray-700 mt-6">Загрузка...</p>
                         <p class="text-sm text-gray-500 mt-2" id="loading-msg">Обработка данных</p>
                     </div>
 
-                    <!-- Error -->
                     <div id="error-screen" class="hidden bg-gradient-to-r from-red-100 to-pink-100 border-2 border-red-400 text-red-700 px-5 py-4 rounded-2xl font-semibold"></div>
                 </div>
             </div>
@@ -184,14 +178,14 @@
                         <span class="flex items-center gap-2">
                             <span>📋</span> Архив чеков
                         </span>
-                        <span id="receipt-count" class="text-sm bg-white text-teal-600 px-3 py-1 rounded-full font-bold">
+                        <span class="text-sm bg-white text-teal-600 px-3 py-1 rounded-full font-bold">
                             {{ receipts|length }}
                         </span>
                     </h2>
                 </div>
 
                 <div class="p-6 h-[600px] overflow-y-auto">
-                    <div id="receipts-list" class="space-y-4">
+                    <div class="space-y-4">
                         {% if receipts %}
                             {% for receipt in receipts %}
                             <div class="bg-gradient-to-br from-white to-gray-50 p-5 rounded-2xl border-2 border-gray-200 hover:border-purple-400 transition shadow-md hover:shadow-xl cursor-pointer" onclick="showReceiptDetails({{ receipt.id }})">
@@ -222,6 +216,19 @@
             </div>
         </div>
 
+        <!-- Modal для деталей чека -->
+        <div id="receipt-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50" onclick="closeModal()">
+            <div class="glass rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl" onclick="event.stopPropagation()">
+                <div class="bg-gradient-to-r from-indigo-600 to-purple-600 p-6 sticky top-0 z-10">
+                    <div class="flex justify-between items-center">
+                        <h2 class="text-2xl font-bold text-white">📄 Детали чека</h2>
+                        <button onclick="closeModal()" class="text-white text-3xl hover:text-gray-200">×</button>
+                    </div>
+                </div>
+                <div id="receipt-details" class="p-6"></div>
+            </div>
+        </div>
+
         <!-- Modal для категории -->
         <div id="category-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50" onclick="closeCategoryModal()">
             <div class="glass rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl" onclick="event.stopPropagation()">
@@ -244,7 +251,7 @@
             ['initial-screen', 'scanner-screen', 'manual-screen', 'loading-screen', 'error-screen'].forEach(s => {
                 document.getElementById(s)?.classList.add('hidden');
             });
-            if (id) document.getElementById(id)?.classList.remove('hidden');
+            document.getElementById(id)?.classList.remove('hidden');
         }
 
         function showError(msg) {
@@ -254,14 +261,9 @@
             setTimeout(() => el.classList.add('hidden'), 5000);
         }
 
-        function setLoading(msg) {
-            document.getElementById('loading-msg').textContent = msg;
-        }
-
         async function startScanner() {
             showScreen('scanner-screen');
             html5QrCode = new Html5Qrcode("reader");
-            
             try {
                 await html5QrCode.start(
                     { facingMode: "environment" },
@@ -273,37 +275,29 @@
                 );
             } catch (err) {
                 showScreen('initial-screen');
-                showError('Ошибка камеры: ' + err);
+                showError('Ошибка камеры: ' + err.message);
             }
         }
 
         async function stopScanner() {
-            if (html5QrCode) {
-                await html5QrCode.stop();
-                html5QrCode = null;
-            }
+            if (html5QrCode) await html5QrCode.stop();
             reset();
         }
 
         async function handleQRCode(url) {
             showScreen('loading-screen');
-            setLoading('Загрузка чека...');
-            
             try {
                 const response = await fetch(`/api/fetch-receipt?url=${encodeURIComponent(url)}`);
                 const result = await response.json();
-                
                 if (result.success) {
-                    showScreen('initial-screen');
-                    await loadReceipts();
-                    showSuccess('✅ Чек добавлен в архив!');
+                    location.reload();
                 } else {
                     showScreen('initial-screen');
                     showError('Ошибка: ' + result.error);
                 }
             } catch (err) {
                 showScreen('initial-screen');
-                showError('Ошибка загрузки: ' + err.message);
+                showError('Ошибка: ' + err.message);
             }
         }
 
@@ -319,51 +313,10 @@
             await handleQRCode(url);
         }
 
-        async function loadReceipts() {
-            const response = await fetch('/api/receipts');
-            const data = await response.json();
-            currentReceipts = data.receipts;
-            
-            const list = document.getElementById('receipts-list');
-            const count = document.getElementById('receipt-count');
-            
-            count.textContent = currentReceipts.length;
-            
-            if (currentReceipts.length === 0) {
-                list.innerHTML = `
-                    <div class="text-center py-20 text-gray-400">
-                        <div class="text-6xl mb-4">📭</div>
-                        <p class="text-lg font-semibold">Нет отсканированных чеков</p>
-                        <p class="text-sm mt-2">Отсканируйте первый чек!</p>
-                    </div>
-                `;
-            } else {
-                list.innerHTML = currentReceipts.map(r => `
-                    <div class="bg-gradient-to-br from-white to-gray-50 p-5 rounded-2xl border-2 border-gray-200 hover:border-purple-400 transition shadow-md hover:shadow-xl cursor-pointer" onclick="showReceiptDetails(${r.id})">
-                        <div class="flex justify-between items-start mb-3">
-                            <div class="flex-1">
-                                <h3 class="font-bold text-lg text-gray-800">${r.companyName}</h3>
-                                <p class="text-xs text-gray-500 mt-1">${r.receiptNumber}</p>
-                            </div>
-                            <button onclick="event.stopPropagation(); deleteReceipt(${r.id})" class="text-red-500 hover:text-red-700 font-bold text-xl">
-                                🗑️
-                            </button>
-                        </div>
-                        <div class="flex justify-between items-center pt-3 border-t border-gray-200">
-                            <span class="text-sm text-gray-600">💰 ${r.total} сум</span>
-                            <span class="text-xs text-gray-400">📅 ${r.dateTime}</span>
-                        </div>
-                    </div>
-                `).join('');
-            }
-        }
-
         async function deleteReceipt(id) {
             if (!confirm('Удалить этот чек?')) return;
-            
             await fetch(`/api/receipts/${id}`, { method: 'DELETE' });
-            await loadReceipts();
-            showSuccess('🗑️ Чек удален');
+            location.reload();
         }
 
         function showReceiptDetails(id) {
@@ -371,48 +324,37 @@
             if (!receipt) return;
             
             const products = receipt.products.map(p => `
-                <div class="bg-gray-50 p-4 rounded-xl hover:bg-gray-100 transition">
+                <div class="bg-gray-50 p-4 rounded-xl">
                     <div class="flex justify-between gap-4">
                         <div class="flex-1">
-                            <div class="flex items-center gap-2 mb-1">
-                                <span class="text-xs bg-purple-100 text-purple-600 px-2 py-1 rounded-full font-semibold">${p.category || '🎁 Другое'}</span>
-                            </div>
-                            <p class="font-semibold text-gray-800">${p.name}</p>
-                            <p class="text-sm text-gray-500 mt-1">Количество: ${p.quantity}</p>
+                            <span class="text-xs bg-purple-100 text-purple-600 px-2 py-1 rounded-full">${p.category}</span>
+                            <p class="font-bold text-gray-800 mt-2">${p.name}</p>
+                            <p class="text-sm text-gray-500">Количество: ${p.quantity}</p>
                         </div>
-                        <p class="font-bold text-lg text-indigo-600 whitespace-nowrap">${p.price} сум</p>
+                        <p class="font-bold text-lg text-indigo-600">${p.price} сум</p>
                     </div>
                 </div>
             `).join('');
 
             document.getElementById('receipt-details').innerHTML = `
                 <div class="space-y-6">
-                    <div class="bg-gradient-to-r from-indigo-50 to-purple-50 p-5 rounded-2xl border-2 border-indigo-200">
-                        <h3 class="font-bold text-xl text-gray-800 mb-2">${receipt.companyName}</h3>
-                        <p class="text-sm text-gray-600"><span class="font-semibold">Чек:</span> ${receipt.receiptNumber}</p>
-                        <p class="text-sm text-gray-600"><span class="font-semibold">Дата:</span> ${receipt.dateTime}</p>
+                    <div class="bg-indigo-50 p-5 rounded-2xl">
+                        <h3 class="font-bold text-xl">${receipt.companyName}</h3>
+                        <p class="text-sm text-gray-600 mt-2">Чек: ${receipt.receiptNumber}</p>
+                        <p class="text-sm text-gray-600">Дата: ${receipt.dateTime}</p>
                     </div>
-
                     <div>
-                        <h4 class="font-bold text-lg text-gray-800 mb-3 flex items-center gap-2">
-                            <span>🛒</span> Товары
-                        </h4>
+                        <h4 class="font-bold text-lg mb-3">🛒 Товары</h4>
                         <div class="space-y-2">${products}</div>
                     </div>
-
-                    <div class="bg-gradient-to-r from-green-50 to-emerald-50 p-6 rounded-2xl border-2 border-green-300">
-                        <div class="flex justify-between items-center">
-                            <span class="text-xl font-bold text-gray-800">Итого:</span>
+                    <div class="bg-green-50 p-6 rounded-2xl border-2 border-green-300">
+                        <div class="flex justify-between">
+                            <span class="text-xl font-bold">Итого:</span>
                             <span class="text-3xl font-bold text-green-600">${receipt.total} сум</span>
                         </div>
                     </div>
-
-                    <a href="${receipt.url}" target="_blank" class="block w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-bold py-4 rounded-2xl text-center transition transform hover:scale-105">
-                        🔗 Открыть оригинал чека
-                    </a>
                 </div>
             `;
-            
             document.getElementById('receipt-modal').classList.remove('hidden');
         }
 
@@ -420,56 +362,47 @@
             document.getElementById('receipt-modal').classList.add('hidden');
         }
 
-        function showCategoryDetails(category, data) {
-            document.getElementById('category-title').textContent = category;
+        function showCategoryDetails(data) {
+            document.getElementById('category-title').textContent = data.name;
             
-            const products = data.products.map((p, i) => `
-                <div class="bg-gray-50 p-4 rounded-xl hover:bg-gray-100 transition">
+            const products = data.data.products.map(p => `
+                <div class="bg-white p-4 rounded-xl border-2 border-gray-200">
                     <div class="flex justify-between gap-4">
                         <div class="flex-1">
-                            <p class="font-semibold text-gray-800">${p.name}</p>
-                            <p class="text-xs text-gray-400 mt-1">Чек: ${p.receipt}</p>
+                            <p class="font-bold text-gray-800">${p.name}</p>
+                            <p class="text-xs text-purple-600 mt-1">📋 Чек: ${p.receipt}</p>
                         </div>
-                        <p class="font-bold text-lg text-purple-600">${p.price.toLocaleString('ru-RU')} сум</p>
+                        <p class="font-bold text-xl text-purple-600">${p.price.toLocaleString('ru-RU')} сум</p>
                     </div>
                 </div>
             `).join('');
 
             document.getElementById('category-details').innerHTML = `
                 <div class="space-y-6">
-                    <div class="bg-gradient-to-r from-purple-50 to-pink-50 p-5 rounded-2xl border-2 border-purple-200">
-                        <div class="grid grid-cols-2 gap-4 text-center">
+                    <div class="bg-purple-50 p-6 rounded-2xl border-2 border-purple-300">
+                        <div class="grid grid-cols-2 gap-6 text-center">
                             <div>
-                                <p class="text-gray-600 mb-1">Товаров</p>
-                                <p class="text-3xl font-bold text-purple-600">${data.count}</p>
+                                <p class="text-gray-600 text-sm mb-1">Куплено товаров</p>
+                                <p class="text-4xl font-black text-purple-600">${data.data.count}</p>
                             </div>
                             <div>
-                                <p class="text-gray-600 mb-1">Сумма</p>
-                                <p class="text-3xl font-bold text-purple-600">${data.total.toLocaleString('ru-RU')} сум</p>
+                                <p class="text-gray-600 text-sm mb-1">Потрачено</p>
+                                <p class="text-4xl font-black text-purple-600">${data.data.total.toLocaleString('ru-RU')}</p>
+                                <p class="text-sm text-gray-500">сум</p>
                             </div>
                         </div>
                     </div>
-
                     <div>
-                        <h4 class="font-bold text-lg text-gray-800 mb-3">Список товаров</h4>
-                        <div class="space-y-2 max-h-96 overflow-y-auto">${products}</div>
+                        <h4 class="font-bold text-xl mb-4">🛍️ Все покупки в этой категории</h4>
+                        <div class="space-y-3 max-h-96 overflow-y-auto">${products}</div>
                     </div>
                 </div>
             `;
-            
             document.getElementById('category-modal').classList.remove('hidden');
         }
 
         function closeCategoryModal() {
             document.getElementById('category-modal').classList.add('hidden');
-        }
-
-        function showSuccess(msg) {
-            const div = document.createElement('div');
-            div.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-4 rounded-2xl shadow-2xl z-50 font-bold';
-            div.textContent = msg;
-            document.body.appendChild(div);
-            setTimeout(() => div.remove(), 3000);
         }
 
         function reset() {
